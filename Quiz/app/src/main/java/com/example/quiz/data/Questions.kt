@@ -2,7 +2,7 @@ package com.example.quiz.data
 
 import com.example.quiz.model.Question
 
-var Questions: List<Question> = listOf(
+val Questions: List<Question> = listOf(
     Question(
         id = 1,
         question = "Призраком какого факультета был Кровавый барон?",

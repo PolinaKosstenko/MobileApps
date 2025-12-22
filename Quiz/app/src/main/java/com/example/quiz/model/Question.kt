@@ -1,8 +1,8 @@
 package com.example.quiz.model
 
 data class Question(
-    var id: Int,
-    var question: String,
-    var answers: List<String>,
-    var trueAnswer: Int
+    val id: Int,
+    val question: String,
+    val answers: List<String>,
+    val trueAnswer: Int
 )
