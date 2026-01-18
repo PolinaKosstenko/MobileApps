@@ -16,16 +16,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun TheEndScreen(trueAnswers: Int, size: Int, startQuiz: () -> Unit) {
-    val result: Int = (trueAnswers.toDouble() / size * 100).toInt()
-
-    val text: String = when (result) {
-        in 0..50 -> "Вы Златопуст Локанс, как жаль"
-        in 51..80 -> "Вы студент Хогвартса, но до Гермионы Грейнджер не дотягиваете"
-        in 81..100 -> "Пора сразиться с Воландемортом в финальной битве"
-
-        else -> ""
-    }
+fun TheEndScreen(
+    trueAnswers: Int,
+    questionsSize: Int,
+    result: Int,
+    text: String,
+    onStartQuiz: () -> Unit
+) {
 
     Column(
         Modifier.width((LocalConfiguration.current.screenWidthDp * 0.7).dp),
@@ -39,7 +36,7 @@ fun TheEndScreen(trueAnswers: Int, size: Int, startQuiz: () -> Unit) {
         )
 
         Text(
-            text ="Вы ответили правильно на ${trueAnswers} из ${size}\n(${result}%)",
+            text ="Вы ответили правильно на ${trueAnswers} из ${questionsSize}\n(${result}%)",
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(bottom = 5.dp)
         )
@@ -52,7 +49,7 @@ fun TheEndScreen(trueAnswers: Int, size: Int, startQuiz: () -> Unit) {
             modifier = Modifier.padding(bottom = 15.dp)
         )
 
-        Button(onClick = startQuiz) {
+        Button(onClick = onStartQuiz) {
             Text(
                 text = "Пройти еще раз",
                 textAlign = TextAlign.Center

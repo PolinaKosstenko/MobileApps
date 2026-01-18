@@ -14,10 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -26,11 +23,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.quiz.model.Question
+import com.example.quiz.ui.viewmodel.QuizUIState
 
 @Composable
-fun QuestionScreen(questions: List<Question>, theEnd: () -> Unit, cnt: () -> Unit) {
-    var number: Int by remember { mutableStateOf(0) }
-    var answer: Int by remember { mutableStateOf(-1) }
+fun QuestionScreen(
+    uiState: QuizUIState,
+    currentQuestion: Question,
+    questionsSize: Int,
+    onSelectAnswer: (Int) -> Unit,
+    onSubmitAnswer: () -> Unit
+) {
     Card(
         modifier = Modifier.width((LocalConfiguration.current.screenWidthDp * 0.7).dp),
 
@@ -49,19 +51,19 @@ fun QuestionScreen(questions: List<Question>, theEnd: () -> Unit, cnt: () -> Uni
                 modifier = Modifier.padding(bottom = 10.dp),
                 text =
                     """
-                    Вопрос ${questions[number].id} из ${questions.size}
-                    ${questions[number].question}
+                    Вопрос ${currentQuestion.id} из ${questionsSize}
+                    ${currentQuestion.question}
                 """.trimIndent(),
                 fontWeight = FontWeight.Bold,
                 fontSize = 17.sp
             )
 
-            for(i in 0..questions[number].answers.size - 1) {
+            for(i in 0..currentQuestion.answers.size - 1) {
                 Row(
                     Modifier
                         .selectable(
-                            selected = (i == answer),
-                            onClick = { answer = i },
+                            selected = (i == uiState.answer),
+                            onClick = { onSelectAnswer(i) },
                             role = Role.RadioButton,
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -70,24 +72,19 @@ fun QuestionScreen(questions: List<Question>, theEnd: () -> Unit, cnt: () -> Uni
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     RadioButton(
-                        selected = (i == answer),
+                        selected = (i == uiState.answer),
                         onClick = null
                     )
                     Text(
-                        text = questions[number].answers[i],
+                        text = currentQuestion.answers[i],
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
             }
 
             Button(
-                enabled = (answer != -1),
-                onClick = {
-                    if (answer == questions[number].trueAnswer) cnt()
-                    if (number < questions.size - 1) number += 1
-                    else theEnd()
-                    answer = -1
-                },
+                enabled = (uiState.answer != -1),
+                onClick = onSubmitAnswer,
                 modifier = Modifier
                     .padding(top = 10.dp)
                     .fillMaxWidth()

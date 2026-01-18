@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun StartScreen(startQuiz: () -> Unit) {
+fun StartScreen(onStartQuiz: () -> Unit) {
     Column(
         Modifier.width((LocalConfiguration.current.screenWidthDp * 0.7).dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -31,7 +31,7 @@ fun StartScreen(startQuiz: () -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(bottom = 10.dp)
         )
-        Button(onClick = startQuiz) {
+        Button(onClick = onStartQuiz) {
             Text(text = "Начать")
         }
     }
