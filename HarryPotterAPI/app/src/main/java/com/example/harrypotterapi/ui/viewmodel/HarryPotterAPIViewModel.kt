@@ -5,9 +5,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.harrypotterapi.data.CharactersRepository
+import com.example.harrypotterapi.data.CharacterRepository
 import com.example.harrypotterapi.model.Character
 import com.example.harrypotterapi.model.House
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.Int
@@ -22,9 +24,31 @@ data class HarryPotterAPIUIState(
     val showWizards: Boolean = false,
 )
 
-class HarryPotterAPIViewModel(private val repository: CharactersRepository = CharactersRepository()): ViewModel() {
+@HiltViewModel
+class HarryPotterAPIViewModel @Inject constructor(private val repository: CharacterRepository): ViewModel() {
     private var charactersDb by mutableStateOf(emptyList<Character>())
     var uiState: HarryPotterAPIUIState by mutableStateOf(HarryPotterAPIUIState())
+
+    private var favouritesItems by mutableStateOf(emptyList<Character>())
+
+    init {
+        loadFavourites()
+    }
+
+    private fun loadFavourites() {
+        viewModelScope.launch {
+            try {
+                val favs = repository.getFavourites()
+                favouritesItems = favs
+                uiState = uiState.copy(favourites = favs.map { it.id })
+            } catch (ex: Exception) {
+                uiState = uiState.copy(
+                    errorMessage = "Что-то пошло не так"
+                )
+            }
+        }
+    }
+
 
     val characters: List<Character>
         get() {
@@ -62,7 +86,7 @@ class HarryPotterAPIViewModel(private val repository: CharactersRepository = Cha
 
         viewModelScope.launch {
             try {
-                charactersDb = repository.characters()
+                charactersDb = repository.getCharacters()
                 uiState = uiState.copy(isLoading = false)
             } catch (ex: Exception) {
                 uiState = uiState.copy(
@@ -85,8 +109,29 @@ class HarryPotterAPIViewModel(private val repository: CharactersRepository = Cha
     fun onToggleFavouritesFilter() {
         uiState = uiState.copy(showFavourites = !uiState.showFavourites)
     }
-
+//
     fun onToggleFavourite(id: Int) {
+
+        viewModelScope.launch {
+            val currentItems = favouritesItems
+            val currentIds = uiState.favourites
+
+            if (id in currentIds) {
+                repository.removeFavourite(id)
+                favouritesItems = currentItems.filterNot {it.id == id}
+                uiState = uiState.copy(favourites = currentIds - id)
+            } else {
+                val character = charactersDb.firstOrNull() { it.id == id }
+                if (character == null) {
+                    uiState = uiState.copy(errorMessage = "Не удалось добавить в избранное")
+                    return@launch
+                }
+                repository.addFavourite(character)
+                favouritesItems = listOf(character) + currentItems
+                uiState = uiState.copy(favourites = currentIds + id)
+            }
+        }
+
         uiState = uiState.copy(
             favourites =
                 if (id in uiState.favourites) uiState.favourites - id
