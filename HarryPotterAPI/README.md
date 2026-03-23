@@ -5,10 +5,20 @@ API: https://hp-api.onrender.com/api/
 ## Костенко Полина Олеговна 
 ПИКД Б9123-09.03.03 5 подгруппа
 
+## Детали работы с Room смотрите внизу README
+
 ## Скриншоты
 ![1](https://github.com/user-attachments/assets/1b04928a-65a6-454b-b8b2-db32d6a5244d)
 ![2](https://github.com/user-attachments/assets/55d26806-b0d6-49d8-9690-0fd92e63acfe)
 ![3](https://github.com/user-attachments/assets/07550064-8398-4a9e-a123-088fe883021c)
 ![4](https://github.com/user-attachments/assets/02e9d7e1-ecf6-467f-8996-93da1bdc8af7)
 ![5](https://github.com/user-attachments/assets/d4315cd3-7dfa-4194-b9ba-3c3ece125f13)
+
+## Проверка Room
+В Room хранится таблица любимых персонажей (favourite_character), в которую добавляется персонаж при нажатии сердечка в деталях персонажа
+
+Как проверить: открыть приложение, нажать на одного/нескольких персонажей и в деталях у них нажать на сердечко. Закрыть приложение, открыть заново, нажать на "Любимые". Добавленные персонажи останутся даже после перезапуска.
+<img width="1919" height="700" alt="Снимок экрана 2026-03-10 234253" src="https://github.com/user-attachments/assets/07a1697d-df91-4026-8b63-90347e497a6f" />
+![photo_5296727362659621736_y](https://github.com/user-attachments/assets/7f6828cf-1c1b-46d4-abbc-8a3bd99a74da)
+
 
