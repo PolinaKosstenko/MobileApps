@@ -1,18 +1,14 @@
 package com.example.harrypotterapi.ui.viewmodel
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.harrypotterapi.data.CharacterRepository
 import com.example.harrypotterapi.model.Character
 import com.example.harrypotterapi.model.House
 import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import kotlin.Int
+import javax.inject.Inject
 
 data class HarryPotterAPIUIState(
     val query: String = "",
@@ -25,131 +21,138 @@ data class HarryPotterAPIUIState(
 )
 
 @HiltViewModel
-class HarryPotterAPIViewModel @Inject constructor(private val repository: CharacterRepository): ViewModel() {
-    private var charactersDb by mutableStateOf(emptyList<Character>())
-    var uiState: HarryPotterAPIUIState by mutableStateOf(HarryPotterAPIUIState())
+class HarryPotterAPIViewModel @Inject constructor(
+    private val repository: CharacterRepository
+) : ViewModel() {
 
-    private var favouritesItems by mutableStateOf(emptyList<Character>())
+    private val _uiState = MutableStateFlow(HarryPotterAPIUIState())
+    val uiState: StateFlow<HarryPotterAPIUIState> = _uiState.asStateFlow()
+
+    private val charactersFlow = MutableStateFlow<List<Character>>(emptyList())
+
+    private val favouriteFlow: StateFlow<List<Character>> =
+        repository.observeFavourites()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
+            )
 
     init {
-        loadFavourites()
-    }
-
-    private fun loadFavourites() {
-        viewModelScope.launch {
-            try {
-                val favs = repository.getFavourites()
-                favouritesItems = favs
-                uiState = uiState.copy(favourites = favs.map { it.id })
-            } catch (ex: Exception) {
-                uiState = uiState.copy(
-                    errorMessage = "Что-то пошло не так"
-                )
-            }
-        }
-    }
-
-
-    val characters: List<Character>
-        get() {
-            var characters: List<Character> = charactersDb
-
-            if (uiState.showFavourites) {
-                characters = characters.filter { c -> c.id in uiState.favourites }
-            }
-
-            if (!uiState.allowedHouses.isEmpty()) {
-                characters = characters.filter { c -> c.house in uiState.allowedHouses }
-            }
-
-            if (uiState.showWizards) {
-                characters = characters.filter { c -> c.wizard }
-            }
-
-            if (!uiState.query.isEmpty()) {
-                characters = characters.filter {
-                    c -> c.name.lowercase().contains(uiState.query.lowercase()) }
-            }
-
-            return characters.sortedBy { character -> character.id }
-        }
-
-    fun setLoading() {
-        uiState = uiState.copy(
-            isLoading = true,
-            errorMessage = ""
-        )
+        loadCharacters()
+        observeFavourites()
     }
 
     fun loadCharacters() {
-        if (charactersDb.isNotEmpty()) return
-
         viewModelScope.launch {
             try {
-                charactersDb = repository.getCharacters()
-                uiState = uiState.copy(isLoading = false)
-            } catch (ex: Exception) {
-                uiState = uiState.copy(
-                    isLoading = false,
-                    errorMessage = "Что-то пошло не так"
-                )
+                _uiState.update { it.copy(isLoading = true, errorMessage = "") }
+
+                val characters = repository.getCharacters()
+                charactersFlow.value = characters
+
+                _uiState.update { it.copy(isLoading = false) }
+
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Что-то пошло не так"
+                    )
+                }
             }
         }
     }
 
-    fun getCharacter(id: Int): Character {
-        return charactersDb[id];
+    private fun observeFavourites() {
+        viewModelScope.launch {
+            favouriteFlow.collect { favs ->
+                _uiState.update {
+                    it.copy(favourites = favs.map { c -> c.id })
+                }
+            }
+        }
     }
 
+    val characters: StateFlow<List<Character>> =
+        combine(charactersFlow, uiState) { characters, state ->
+
+            var result = characters
+
+            if (state.showFavourites) {
+                result = result.filter { it.id in state.favourites }
+            }
+
+            if (state.allowedHouses.isNotEmpty()) {
+                result = result.filter { it.house in state.allowedHouses }
+            }
+
+            if (state.showWizards) {
+                result = result.filter { it.wizard }
+            }
+
+            if (state.query.isNotEmpty()) {
+                result = result.filter {
+                    it.name.lowercase().contains(state.query.lowercase())
+                }
+            }
+
+            result.sortedBy { it.id }
+        }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
+            )
+
     fun onSearchChange(query: String) {
-        uiState = uiState.copy(query = query)
-        if (uiState.query == "") return;
+        _uiState.update { it.copy(query = query) }
     }
 
     fun onToggleFavouritesFilter() {
-        uiState = uiState.copy(showFavourites = !uiState.showFavourites)
-    }
-//
-    fun onToggleFavourite(id: Int) {
-
-        viewModelScope.launch {
-            val currentItems = favouritesItems
-            val currentIds = uiState.favourites
-
-            if (id in currentIds) {
-                repository.removeFavourite(id)
-                favouritesItems = currentItems.filterNot {it.id == id}
-                uiState = uiState.copy(favourites = currentIds - id)
-            } else {
-                val character = charactersDb.firstOrNull() { it.id == id }
-                if (character == null) {
-                    uiState = uiState.copy(errorMessage = "Не удалось добавить в избранное")
-                    return@launch
-                }
-                repository.addFavourite(character)
-                favouritesItems = listOf(character) + currentItems
-                uiState = uiState.copy(favourites = currentIds + id)
-            }
+        _uiState.update {
+            it.copy(showFavourites = !it.showFavourites)
         }
-
-        uiState = uiState.copy(
-            favourites =
-                if (id in uiState.favourites) uiState.favourites - id
-                else uiState.favourites + id)
-    }
-
-    fun isFavourite(id: Int): Boolean {
-        return id in uiState.favourites
     }
 
     fun onToggleWizardFilter() {
-        uiState = uiState.copy(showWizards = !uiState.showWizards)
+        _uiState.update {
+            it.copy(showWizards = !it.showWizards)
+        }
     }
 
     fun onAllowHouse(house: House) {
-        uiState = uiState.copy(allowedHouses =
-            if (house in uiState.allowedHouses) uiState.allowedHouses - house
-            else uiState.allowedHouses + house)
+        _uiState.update {
+            val current = it.allowedHouses
+            it.copy(
+                allowedHouses =
+                    if (house in current) current - house
+                    else current + house
+            )
+        }
     }
 
+    fun onToggleFavourite(id: Int) {
+        viewModelScope.launch {
+
+            val character = charactersFlow.value.firstOrNull { it.id == id }
+                ?: return@launch
+
+            val isFav = id in _uiState.value.favourites
+
+            if (isFav) {
+                repository.removeFavourite(id)
+            } else {
+                repository.addFavourite(character)
+            }
+        }
+    }
+
+    fun isFavourite(id: Int): Boolean {
+        return id in uiState.value.favourites
+    }
+
+    fun getCharacter(id: Int): Character? {
+        return charactersFlow.value.firstOrNull { it.id == id }
+    }
 }
