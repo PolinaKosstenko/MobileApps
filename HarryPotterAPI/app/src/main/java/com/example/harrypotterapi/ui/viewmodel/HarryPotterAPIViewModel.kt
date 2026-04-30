@@ -9,138 +9,150 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.collections.filter
 
-data class HarryPotterAPIUIState(
+data class FilterState(
     val query: String = "",
-    val isLoading: Boolean = true,
-    val errorMessage: String = "",
     val showFavourites: Boolean = false,
-    val favourites: List<Int> = listOf(),
-    val allowedHouses: List<House> = listOf(),
     val showWizards: Boolean = false,
+    val allowedHouses: Set<House> = emptySet()
 )
 
 @HiltViewModel
 class HarryPotterAPIViewModel @Inject constructor(
     private val repository: CharacterRepository
 ) : ViewModel() {
+    private val searchQueryFlow = MutableStateFlow("")
+    private val showFavouritesFilterFlow = MutableStateFlow(false)
+    private val showWizardsFilterFlow = MutableStateFlow(false)
+    private val allowedHousesFlow = MutableStateFlow<Set<House>>(emptySet())
 
-    private val _uiState = MutableStateFlow(HarryPotterAPIUIState())
-    val uiState: StateFlow<HarryPotterAPIUIState> = _uiState.asStateFlow()
+    private val isLoadingFlow = MutableStateFlow(true)
+    private val errorMessageFlow = MutableStateFlow<String?>(null)
 
-    private val charactersFlow = MutableStateFlow<List<Character>>(emptyList())
+    private val favouritesFlow = repository.observeFavourites()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList()
+        )
 
-    private val favouriteFlow: StateFlow<List<Character>> =
-        repository.observeFavourites()
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = emptyList()
-            )
+    val filterStateFlow = combine(
+        searchQueryFlow,
+        showFavouritesFilterFlow,
+        showWizardsFilterFlow,
+        allowedHousesFlow
+    ) { query, showFavourites, showWizards, allowedHouses ->
+        FilterState(query, showFavourites, showWizards, allowedHouses)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = FilterState()
+    )
 
-    init {
-        loadCharacters()
-        observeFavourites()
-    }
-
-    fun loadCharacters() {
-        viewModelScope.launch {
-            try {
-                _uiState.update { it.copy(isLoading = true, errorMessage = "") }
-
-                val characters = repository.getCharacters()
-                charactersFlow.value = characters
-
-                _uiState.update { it.copy(isLoading = false) }
-
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = "Что-то пошло не так"
-                    )
-                }
+    private val retryEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val charactersFromApiFlow: StateFlow<List<Character>> = retryEvents
+        .onStart { emit(Unit) }
+        .flatMapLatest {
+            flow {
+                emit(repository.getCharacters())
+            }.catch { e ->
+                errorMessageFlow.value = "Ошибка загрузки: ${e.message}"
+                emit(emptyList())
+            }.onStart {
+                isLoadingFlow.value = true
+            }.onCompletion {
+                isLoadingFlow.value = false
             }
         }
-    }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList()
+        )
 
-    private fun observeFavourites() {
-        viewModelScope.launch {
-            favouriteFlow.collect { favs ->
-                _uiState.update {
-                    it.copy(favourites = favs.map { c -> c.id })
-                }
+    val characters: StateFlow<List<Character>> = combine(
+        charactersFromApiFlow,
+        filterStateFlow,
+        favouritesFlow
+    ) { allCharacters: List<Character>,
+        filterState: FilterState,
+        favourites: List<Character> ->
+        var result = allCharacters
+
+        if (filterState.showFavourites) {
+            val favouriteIds = favourites.map { it.id }.toSet()
+            result = result.filter { it.id in favouriteIds }
+        }
+
+        if (filterState.allowedHouses.isNotEmpty()) {
+            result = result.filter { it.house in filterState.allowedHouses }
+        }
+
+        if (filterState.showWizards) {
+            result = result.filter { it.wizard }
+        }
+
+        if (filterState.query.isNotBlank()) {
+            val lowerQuery = filterState.query.lowercase()
+            result = result.filter {
+                it.name.lowercase().contains(lowerQuery)
             }
         }
-    }
 
-    val characters: StateFlow<List<Character>> =
-        combine(charactersFlow, uiState) { characters, state ->
+        result.sortedBy { it.id }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList()
+    );
 
-            var result = characters
 
-            if (state.showFavourites) {
-                result = result.filter { it.id in state.favourites }
-            }
+    val isLoading: StateFlow<Boolean> = isLoadingFlow.asStateFlow()
 
-            if (state.allowedHouses.isNotEmpty()) {
-                result = result.filter { it.house in state.allowedHouses }
-            }
-
-            if (state.showWizards) {
-                result = result.filter { it.wizard }
-            }
-
-            if (state.query.isNotEmpty()) {
-                result = result.filter {
-                    it.name.lowercase().contains(state.query.lowercase())
-                }
-            }
-
-            result.sortedBy { it.id }
-        }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = emptyList()
-            )
+    val errorMessage: StateFlow<String?> = errorMessageFlow.asStateFlow()
 
     fun onSearchChange(query: String) {
-        _uiState.update { it.copy(query = query) }
+        searchQueryFlow.value = query
     }
 
     fun onToggleFavouritesFilter() {
-        _uiState.update {
-            it.copy(showFavourites = !it.showFavourites)
-        }
+        showFavouritesFilterFlow.update { !it }
     }
 
     fun onToggleWizardFilter() {
-        _uiState.update {
-            it.copy(showWizards = !it.showWizards)
-        }
+        showWizardsFilterFlow.update { !it }
     }
 
     fun onAllowHouse(house: House) {
-        _uiState.update {
-            val current = it.allowedHouses
-            it.copy(
-                allowedHouses =
-                    if (house in current) current - house
-                    else current + house
-            )
+        allowedHousesFlow.update { current ->
+            if (house in current) current - house
+            else current + house
         }
+    }
+
+    private fun getCharacterAndFavouriteStatus(id: Int): Pair<Character?, Boolean> {
+        val character = charactersFromApiFlow.value.firstOrNull { it.id == id }
+        val isFavourite = favouritesFlow.value.any { it.id == id }
+        return character to isFavourite
+    }
+
+    fun isFavouriteFlow(characterId: Int): StateFlow<Boolean> {
+        return favouritesFlow.map { favourites ->
+            favourites.any { it.id == characterId }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = false
+        )
     }
 
     fun onToggleFavourite(id: Int) {
         viewModelScope.launch {
+            val (character, isFavourite) = getCharacterAndFavouriteStatus(id)
+            if (character == null) return@launch
 
-            val character = charactersFlow.value.firstOrNull { it.id == id }
-                ?: return@launch
-
-            val isFav = id in _uiState.value.favourites
-
-            if (isFav) {
+            if (isFavourite) {
                 repository.removeFavourite(id)
             } else {
                 repository.addFavourite(character)
@@ -148,11 +160,10 @@ class HarryPotterAPIViewModel @Inject constructor(
         }
     }
 
-    fun isFavourite(id: Int): Boolean {
-        return id in uiState.value.favourites
-    }
-
-    fun getCharacter(id: Int): Character? {
-        return charactersFlow.value.firstOrNull { it.id == id }
+    fun onRetry() {
+        viewModelScope.launch {
+            errorMessageFlow.value = null
+            retryEvents.tryEmit(Unit)
+        }
     }
 }

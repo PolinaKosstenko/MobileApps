@@ -26,7 +26,7 @@ import com.example.harrypotterapi.model.Character
 fun CharacterDetailScreen(
     character: Character,
     onToggleFavourite: (id: Int) -> Unit,
-    isFavourite: (id: Int) -> Boolean,
+    isFavourite: Boolean,
     onLoadList: () -> Unit
 ) {
     val characterKeyToText = mapOf<String, String>(
@@ -75,7 +75,7 @@ fun CharacterDetailScreen(
             ),
             onClick = { onToggleFavourite(character.id) }
         ) {
-            Text(if (isFavourite(character.id)) "❤\uFE0F" else "Добавить в любимых")
+            Text(if (isFavourite) "❤\uFE0F" else "Добавить в любимых")
         }
 
         Spacer(modifier = Modifier.padding(4.dp))

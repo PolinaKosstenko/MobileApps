@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -51,17 +52,21 @@ fun App() {
 
                 composable(route = HarryPotterAPIRoute.CharacterList.route) {
 
-                    val uiState = holder.uiState.collectAsState().value
-                    val characters = holder.characters.collectAsState().value
+                    val characters by holder.characters.collectAsState()
+                    val isLoading by holder.isLoading.collectAsState()
+                    val errorMessage by holder.errorMessage.collectAsState()
+                    val filters by holder.filterStateFlow.collectAsState()
 
                     CharacterListScreen(
-                        state = uiState,
                         characters = characters,
+                        isLoading = isLoading,
+                        errorMessage = errorMessage,
+                        filters = filters,
                         onSearchChange = holder::onSearchChange,
                         onToggleWizardFilter = holder::onToggleWizardFilter,
                         onToggleFavouritesFilter = holder::onToggleFavouritesFilter,
                         onAllowHouse = holder::onAllowHouse,
-                        onRetry = { holder.loadCharacters() }
+                        onRetry = holder::onRetry,
                     ) { id ->
                         navController.navigate(
                             HarryPotterAPIRoute.CharacterDetail.createRoute(id)
@@ -78,7 +83,6 @@ fun App() {
                     )
                 ) { backStackEntry ->
 
-                    val uiState = holder.uiState.collectAsState().value
                     val characters = holder.characters.collectAsState().value
 
                     val id = backStackEntry.arguments?.getInt(
@@ -88,16 +92,16 @@ fun App() {
                     val character = characters.firstOrNull { it.id == id }
 
                     if (character == null) {
-
                         androidx.compose.runtime.LaunchedEffect(Unit) {
                             navController.popBackStack()
                         }
-
                     } else {
+                        val isFavourite by holder.isFavouriteFlow(character.id).collectAsState()
+
                         CharacterDetailScreen(
                             character = character,
                             onToggleFavourite = holder::onToggleFavourite,
-                            isFavourite = { id -> id in uiState.favourites },
+                            isFavourite = isFavourite,
                             onLoadList = {
                                 navController.popBackStack()
                             }

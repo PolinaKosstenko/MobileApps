@@ -51,16 +51,15 @@ class CharacterListScreenTest {
 
         composeRule.setContent {
             CharacterListScreen(
-                state = state,
                 characters = listOf(testCharacter),
+                onRetry = {},
                 onSearchChange = {},
                 onToggleWizardFilter = {},
                 onToggleFavouritesFilter = {},
                 onAllowHouse = {},
-                onRetry = {},
                 onSelect = { id ->
                     selectedCharacterId = id
-                }
+                },,
             )
         }
 

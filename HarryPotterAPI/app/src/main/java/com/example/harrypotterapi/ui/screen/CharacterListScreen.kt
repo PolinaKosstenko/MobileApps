@@ -24,50 +24,54 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.harrypotterapi.model.Character
 import com.example.harrypotterapi.model.House
-import com.example.harrypotterapi.ui.viewmodel.HarryPotterAPIUIState
+import com.example.harrypotterapi.ui.viewmodel.FilterState
 import com.example.harrypotterapi.ui.widget.CharacterItem
 
 @Composable
 fun CharacterListScreen(
-    state: HarryPotterAPIUIState,
     characters: List<Character>,
+    isLoading: Boolean,
+    errorMessage: String?,
+    filters: FilterState,
     onRetry: () -> Unit,
     onSearchChange: (String) -> Unit,
     onToggleWizardFilter: () -> Unit,
     onToggleFavouritesFilter: () -> Unit,
     onAllowHouse: (House) -> Unit,
-    onSelect: (Int) -> Unit
+    onSelect: (Int) -> Unit,
 ) {
     Column(
         modifier = Modifier.padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        if (!state.errorMessage.isEmpty()) {
-            Text(
-                text = "Ошибка загрузки персонажей! ${state.errorMessage}",
-                color = Color.Red
-            )
+        errorMessage?.isEmpty()?.let {
+            if (!it) {
+                Text(
+                    text = "Ошибка загрузки персонажей! ${errorMessage}",
+                    color = Color.Red
+                )
 
-            Button(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onRetry,
-            ) {
-                Text("Попробовать заново")
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onRetry,
+                ) {
+                    Text("Попробовать заново")
+                }
+
+                return
             }
-
-            return
         }
 
         OutlinedTextField(
-            value = state.query,
+            value = filters.query,
             onValueChange = onSearchChange,
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Введите имя персонажа") },
             singleLine = true
         )
 
-        if (state.isLoading) {
+        if (isLoading) {
             Text(
                 text = "Загрузка...",
             )
@@ -89,11 +93,11 @@ fun CharacterListScreen(
                 Column(
                     modifier = Modifier
                         .selectable(
-                            selected = state.showWizards,
+                            selected = filters.showWizards,
                             onClick = onToggleWizardFilter
                         )
                         .background(color =
-                            if (state.showWizards) Color(255, 215, 0)
+                            if (filters.showWizards) Color(255, 215, 0)
                             else Color.Gray)
                         .padding(6.dp)
                 ) {
@@ -106,10 +110,10 @@ fun CharacterListScreen(
                 Column(
                     modifier = Modifier
                         .selectable(
-                            selected = state.showFavourites,
+                            selected = filters.showFavourites,
                             onClick = onToggleFavouritesFilter
                         )
-                        .background(color = if (state.showFavourites) Color.Magenta else Color.Gray)
+                        .background(color = if (filters.showFavourites) Color.Magenta else Color.Gray)
                         .padding(6.dp)
                 ) {
                     Text(
@@ -122,10 +126,10 @@ fun CharacterListScreen(
                     Column(
                         modifier = Modifier
                             .selectable(
-                                selected = house in state.allowedHouses,
+                                selected = house in filters.allowedHouses,
                                 onClick = { onAllowHouse(house) }
                             )
-                            .background(color = if (house in state.allowedHouses) when (house) {
+                            .background(color = if (house in filters.allowedHouses) when (house) {
                                 House.Gryffindor -> Color.Red
                                 House.Hufflepuff -> Color.Yellow
                                 House.Ravenclaw -> Color.Blue
@@ -142,7 +146,7 @@ fun CharacterListScreen(
                                 House.Slytherin -> "Slytherin"
                                 else -> "No House"
                             },
-                            color = if (house in state.allowedHouses)when (house) {
+                            color = if (house in filters.allowedHouses)when (house) {
                                 House.Gryffindor -> Color.White
                                 House.Ravenclaw -> Color.White
                                 House.NoHouse -> Color.White
