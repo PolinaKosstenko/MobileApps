@@ -1,8 +1,9 @@
 package com.example.harrypotterapi.data.remote
 
-import com.google.gson.annotations.SerializedName
+import com.example.harrypotterapi.R
 import com.example.harrypotterapi.model.Character
 import com.example.harrypotterapi.model.House
+import com.example.harrypotterapi.model.Spell
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.Int
@@ -13,6 +14,7 @@ data class HpApiDto(
     val species: String,
     val gender: String,
     val house: String,
+    val ancestry: String,
     val dateOfBirth: String?,
     val wizard: Boolean,
     val eyeColour: String,
@@ -24,6 +26,12 @@ data class HpApiDto(
 data class HpApiWandDto(
     val wood: String,
     val core: String
+)
+
+data class HpApiSpellDto(
+    val id: String,
+    val name: String,
+    val description: String,
 )
 
 
@@ -64,10 +72,36 @@ fun HpApiDto.dtoToCharacter(i: Int): Character? {
         species = if (species == "") "No species" else species,
         wizard = wizard,
         house = if (house == "") House.NoHouse else mapToHouse[house],
+        ancestry = if (ancestry == "") "No ancestry" else ancestry,
         wandWood = if (wand.wood == "") "No wand wood" else wand.wood,
         wandCore = if (wand.core == "") "No wand core" else wand.core,
-        patronus = if (patronus == "") "No patronus" else patronus
+        patronus = if (patronus == "") "No patronus" else patronus,
+        isFavourite = false,
     )
 }
 
+fun HpApiSpellDto.dtoToSpell(i: Int): Spell {
+    val availableImgs = listOf<String>(
+        "Accio",
+        "Alohomora",
+        "Ascendio",
+        "Avada Kedavra",
+        "Crucio",
+        "Expecto patronum",
+        "Expelliarmus",
+        "Finite Incantatem",
+        "Imperio",
+        "Legilimens",
+        "Lumos",
+        "Oculus Reparo",
+        "Sectumsempra",
+        "Wingardium Leviosa",
+    )
 
+    return Spell(
+        id = i,
+        name = if (name == "") "Noname" else name,
+        description = if (description == "") "No description" else description,
+        image = if (name in availableImgs) name.lowercase().replace(" ", "") else null
+    )
+}
