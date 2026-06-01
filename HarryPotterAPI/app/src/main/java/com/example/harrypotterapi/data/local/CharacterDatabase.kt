@@ -6,11 +6,12 @@ import androidx.room.TypeConverters
 
 @TypeConverters(Converters::class)
 @Database (
-    entities = [FavouriteCharacterEntity::class],
-    version = 1,
+    entities = [CharacterEntity::class, SpellEntity::class],
+    version = 6,
     exportSchema = false
 )
 abstract class CharacterDatabase : RoomDatabase() {
 
-    abstract fun favouriteCharacterDao(): FavouriteCharacterDao
+    abstract fun characterDao(): CharacterDao
+    abstract fun spellDao(): SpellDao
 }

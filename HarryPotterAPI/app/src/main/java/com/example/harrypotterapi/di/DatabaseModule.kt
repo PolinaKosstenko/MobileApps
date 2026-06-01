@@ -3,7 +3,8 @@ package com.example.harrypotterapi.di
 import android.content.Context
 import androidx.room.Room
 import com.example.harrypotterapi.data.local.CharacterDatabase
-import com.example.harrypotterapi.data.local.FavouriteCharacterDao
+import com.example.harrypotterapi.data.local.CharacterDao
+import com.example.harrypotterapi.data.local.SpellDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -23,9 +24,15 @@ object DatabaseModule {
             context,
             CharacterDatabase::class.java,
             "character.db"
-        ).build()
+        )
+            .fallbackToDestructiveMigration(false)
+            .build()
 
     @Provides
-    fun providesFavouriteDao(db: CharacterDatabase): FavouriteCharacterDao =
-        db.favouriteCharacterDao()
+    fun providesCharacterDao(db: CharacterDatabase): CharacterDao =
+        db.characterDao()
+
+    @Provides
+    fun providesSpellDao(db: CharacterDatabase): SpellDao =
+        db.spellDao()
 }
