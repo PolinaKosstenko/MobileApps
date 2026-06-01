@@ -3,8 +3,10 @@ package com.example.harrypotterapi.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.harrypotterapi.data.CharacterRepository
+import com.example.harrypotterapi.data.SpellsRepository
 import com.example.harrypotterapi.model.Character
 import com.example.harrypotterapi.model.House
+import com.example.harrypotterapi.model.Spell
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -18,17 +20,21 @@ data class FilterState(
     val allowedHouses: Set<House> = emptySet()
 )
 
+sealed class UiState<out T> {
+    data object Loading : UiState<Nothing>()
+    data class Error(val message: String) : UiState<Nothing>()
+    data class Success<T>(val data: T) : UiState<T>()
+}
+
 @HiltViewModel
 class HarryPotterAPIViewModel @Inject constructor(
-    private val repository: CharacterRepository
+    private val repository: CharacterRepository,
+    private val spellsRepository: SpellsRepository
 ) : ViewModel() {
     private val searchQueryFlow = MutableStateFlow("")
     private val showFavouritesFilterFlow = MutableStateFlow(false)
     private val showWizardsFilterFlow = MutableStateFlow(false)
     private val allowedHousesFlow = MutableStateFlow<Set<House>>(emptySet())
-
-    private val isLoadingFlow = MutableStateFlow(true)
-    private val errorMessageFlow = MutableStateFlow<String?>(null)
 
     private val favouritesFlow = repository.observeFavourites()
         .stateIn(
@@ -51,38 +57,82 @@ class HarryPotterAPIViewModel @Inject constructor(
     )
 
     private val retryEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val charactersFromApiFlow: StateFlow<List<Character>> = retryEvents
+
+    val getCharactersUiState: StateFlow<UiState<List<Character>>> = retryEvents
         .onStart { emit(Unit) }
         .flatMapLatest {
-            flow {
-                emit(repository.getCharacters())
-            }.catch { e ->
-                errorMessageFlow.value = "Ошибка загрузки: ${e.message}"
-                emit(emptyList())
-            }.onStart {
-                isLoadingFlow.value = true
-            }.onCompletion {
-                isLoadingFlow.value = false
+            combine(
+                repository.getCharacters(),
+                filterStateFlow,
+            ) { allCharacters, filterState ->
+                applyFilters(allCharacters, filterState)
             }
+                .map { characters -> UiState.Success(characters) as UiState<List<Character>> }
+                .catch { e -> emit(UiState.Error(e.message ?: "Неизвестная ошибка")) }
+                .onStart {
+                    if (repository.isEmpty()) {
+                        emit(UiState.Loading)
+                    }
+                }
         }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = emptyList()
+            initialValue = UiState.Loading
         )
 
-    val characters: StateFlow<List<Character>> = combine(
-        charactersFromApiFlow,
-        filterStateFlow,
-        favouritesFlow
-    ) { allCharacters: List<Character>,
+    private val selectedCharacterId = MutableStateFlow<Int?>(null)
+
+    fun selectCharacter(id: Int) {
+        selectedCharacterId.value = id
+    }
+
+    val selectedCharacterUiState: StateFlow<UiState<Character>> = selectedCharacterId
+        .filterNotNull()
+        .flatMapLatest { id ->
+            repository.getCharacter(id)
+                .map { character ->
+                    if (character == null) {
+                        UiState.Error("Персонаж не найден") as UiState<Character>
+                    } else {
+                        UiState.Success(character)
+                    }
+                }
+                .catch { e -> emit(UiState.Error(e.message ?: "Неизвестная ошибка")) }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = UiState.Loading
+        )
+
+    val getSpellsUiState: StateFlow<UiState<List<Spell>>> = retryEvents
+        .onStart { emit(Unit) }
+        .flatMapLatest {
+            spellsRepository.getSpells()
+                .map { spells -> UiState.Success(spells) as UiState<List<Spell>> }
+                .catch { e -> emit(UiState.Error(e.message ?: "Неизвестная ошибка")) }
+                .onStart {
+                    if (spellsRepository.isEmpty()) {
+                        emit(UiState.Loading)
+                    }
+                }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = UiState.Loading
+        )
+
+
+    private fun applyFilters(
+        allCharacters: List<Character>,
         filterState: FilterState,
-        favourites: List<Character> ->
+    ): List<Character> {
         var result = allCharacters
 
         if (filterState.showFavourites) {
-            val favouriteIds = favourites.map { it.id }.toSet()
-            result = result.filter { it.id in favouriteIds }
+            result = result.filter { it.isFavourite }
         }
 
         if (filterState.allowedHouses.isNotEmpty()) {
@@ -100,17 +150,8 @@ class HarryPotterAPIViewModel @Inject constructor(
             }
         }
 
-        result.sortedBy { it.id }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = emptyList()
-    );
-
-
-    val isLoading: StateFlow<Boolean> = isLoadingFlow.asStateFlow()
-
-    val errorMessage: StateFlow<String?> = errorMessageFlow.asStateFlow()
+        return result.sortedBy { it.id }
+    }
 
     fun onSearchChange(query: String) {
         searchQueryFlow.value = query
@@ -131,39 +172,45 @@ class HarryPotterAPIViewModel @Inject constructor(
         }
     }
 
-    private fun getCharacterAndFavouriteStatus(id: Int): Pair<Character?, Boolean> {
-        val character = charactersFromApiFlow.value.firstOrNull { it.id == id }
-        val isFavourite = favouritesFlow.value.any { it.id == id }
-        return character to isFavourite
-    }
-
-    fun isFavouriteFlow(characterId: Int): StateFlow<Boolean> {
-        return favouritesFlow.map { favourites ->
-            favourites.any { it.id == characterId }
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = false
-        )
-    }
-
     fun onToggleFavourite(id: Int) {
         viewModelScope.launch {
-            val (character, isFavourite) = getCharacterAndFavouriteStatus(id)
-            if (character == null) return@launch
-
-            if (isFavourite) {
-                repository.removeFavourite(id)
-            } else {
-                repository.addFavourite(character)
-            }
+            repository.toggleFavourite(id)
         }
     }
 
     fun onRetry() {
         viewModelScope.launch {
-            errorMessageFlow.value = null
             retryEvents.tryEmit(Unit)
         }
     }
+
+    private val selectedSpellId = MutableStateFlow<Int?>(null)
+    fun selectSpell(id: Int) {
+        selectedSpellId.value = id
+    }
+    val selectedSpellUiState: StateFlow<UiState<Spell>> = selectedSpellId
+        .filterNotNull()
+        .flatMapLatest { id ->
+            spellsRepository.getSpell(id)
+                .map { spell ->
+                    if (spell == null) {
+                        UiState.Error("Заклинание не найдено") as UiState<Spell>
+                    } else {
+                        UiState.Success(spell)
+                    }
+                }
+                .catch { e -> emit(UiState.Error(e.message ?: "Неизвестная ошибка")) }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = UiState.Loading
+        )
+
+    fun deleteCharacter(id: Int) {
+        viewModelScope.launch {
+            repository.deleteCharacter(id)
+        }
+    }
+
 }

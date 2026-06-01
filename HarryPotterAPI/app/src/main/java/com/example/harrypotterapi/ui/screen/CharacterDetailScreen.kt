@@ -14,22 +14,52 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.harrypotterapi.model.Character
+import com.example.harrypotterapi.ui.viewmodel.HarryPotterAPIViewModel
+import com.example.harrypotterapi.ui.viewmodel.UiState
+import com.example.harrypotterapi.ui.widget.ErrorView
+import com.example.harrypotterapi.ui.widget.LoadingView
 
 
 @Composable
 fun CharacterDetailScreen(
-    character: Character,
+    viewModel: HarryPotterAPIViewModel,
+    characterId: Int,
     onToggleFavourite: (id: Int) -> Unit,
-    isFavourite: Boolean,
     onLoadList: () -> Unit
 ) {
-    val characterKeyToText = mapOf<String, String>(
+    LaunchedEffect(characterId) {
+        viewModel.selectCharacter(characterId)
+    }
+
+    val state by viewModel.selectedCharacterUiState.collectAsStateWithLifecycle()
+
+    when (val uiState = state) {
+        is UiState.Loading -> LoadingView()
+        is UiState.Error -> ErrorView(
+            "Ошибка загрузки персонажа! ${uiState.message}",
+            viewModel::onRetry
+        )
+        is UiState.Success -> CharacterView(uiState.data, onToggleFavourite, onLoadList)
+    }
+}
+
+@Composable
+fun CharacterView(
+    character: Character,
+    onToggleFavourite: (id: Int) -> Unit,
+    onLoadList: () -> Unit
+) {
+
+    val characterKeyToText = mapOf(
         "Имя" to character.name,
         "Пол" to character.gender,
         "Дата рождения" to character.dateOfBirth.toString(),
@@ -42,6 +72,7 @@ fun CharacterDetailScreen(
         "Сердцевина палочки" to character.wandCore,
         "Патронус" to character.patronus
     )
+
     Card(
         modifier = Modifier.padding(8.dp),
         colors = CardDefaults.cardColors(
@@ -75,7 +106,7 @@ fun CharacterDetailScreen(
             ),
             onClick = { onToggleFavourite(character.id) }
         ) {
-            Text(if (isFavourite) "❤\uFE0F" else "Добавить в любимых")
+            Text(if (character.isFavourite) "❤\uFE0F" else "Добавить в любимых")
         }
 
         Spacer(modifier = Modifier.padding(4.dp))

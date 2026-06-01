@@ -29,7 +29,7 @@ fun CharacterItem(
             .width((LocalConfiguration.current.screenWidthDp * 0.7).dp),
 
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer),
+            containerColor = MaterialTheme.colorScheme.primary),
 
         elevation = CardDefaults.cardElevation(
             defaultElevation = 6.dp)
