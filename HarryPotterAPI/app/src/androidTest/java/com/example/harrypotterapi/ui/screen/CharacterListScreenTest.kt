@@ -39,7 +39,6 @@ class CharacterListScreenTest {
 
         var selectedCharacterId: Int? = null
 
-
         val state = HarryPotterAPIUIState(
             query = "",
             isLoading = false,
@@ -50,32 +49,29 @@ class CharacterListScreenTest {
             showWizards = false
         )
 
-
         composeRule.setContent {
             CharacterListScreen(
-                state = state,
                 characters = listOf(testCharacter),
-                setLoading = {},
+                onRetry = {},
                 onSearchChange = {},
                 onToggleWizardFilter = {},
                 onToggleFavouritesFilter = {},
                 onAllowHouse = {},
                 onSelect = { id ->
                     selectedCharacterId = id
-                }
+                },,
             )
         }
-
 
         composeRule.onNodeWithText("Harry Potter")
             .assertExists()
             .assertIsDisplayed()
 
-
         composeRule.onNodeWithText("Harry Potter")
             .performClick()
 
-
-        assert(selectedCharacterId == 1) { "Ожидался ID=1, но получен $selectedCharacterId" }
+        assert(selectedCharacterId == 1) {
+            "Ожидался ID=1, но получен $selectedCharacterId"
+        }
     }
 }
